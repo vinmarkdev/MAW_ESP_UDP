@@ -2,13 +2,13 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
-#define UART_BAUD 115200
-#define PACK_TIMEOUT_MS 10
+#define UART_BAUD 115200  // use stable default; increase if hardware supports
+#define PACK_TIMEOUT_MS 2 // reduced packet assembly delay
 #define BUFFER_SIZE 4096
 
 #define UDP_PORT 14550
 
-const char *AP_SSID = "AA_Link";
+const char *AP_SSID = "AA_Link_00001";
 const char *AP_PASS = "TroLoLo_AA";
 const IPAddress AP_IP(192, 168, 4, 1);
 const IPAddress AP_NETMASK(255, 255, 255, 0);
@@ -56,40 +56,21 @@ void loop() {
     lastUdpTime = millis();
     udp.read(udpToUartBuf, packetSize);
     Serial.write(udpToUartBuf, packetSize);
-    // Serial.print("[UDP] recv ");
-    // Serial.print(packetSize);
-    // Serial.println(" bytes from GCS");
   }
 
-  // Timeout remote IP if no UDP packets for too long
   if (remotePort > 0 && millis() - lastUdpTime > UDP_TIMEOUT_MS) {
-    remoteIp = INADDR_NONE;
+    remoteIp = IPAddress(0, 0, 0, 0);
     remotePort = 0;
-    // Serial.println("[UDP] remote IP timed out");
   }
 
-  if (Serial.available()) {
+  while (Serial.available() && uartToUdpLen < BUFFER_SIZE) {
+    uartToUdpBuf[uartToUdpLen++] = Serial.read();
+  }
+
+  if (uartToUdpLen > 0 && remotePort > 0) {
+    udp.beginPacket(remoteIp, remotePort);
+    udp.write(uartToUdpBuf, uartToUdpLen);
+    udp.endPacket();
     uartToUdpLen = 0;
-    unsigned long lastRead = millis();
-
-    while (millis() - lastRead < PACK_TIMEOUT_MS) {
-      while (Serial.available() && uartToUdpLen < BUFFER_SIZE) {
-        uartToUdpBuf[uartToUdpLen++] = Serial.read();
-        lastRead = millis();
-      }
-    }
-
-    if (uartToUdpLen > 0 && remotePort > 0) {
-      udp.beginPacket(remoteIp, remotePort);
-      udp.write(uartToUdpBuf, uartToUdpLen);
-      udp.endPacket();
-      // Serial.print("[FC] send ");
-      // Serial.print(uartToUdpLen);
-      // Serial.println(" bytes");
-    } else if (uartToUdpLen > 0) {
-      // Serial.print("[UART] buffered ");
-      // Serial.print(uartToUdpLen);
-      // Serial.println(" bytes (waiting for GCS)");
-    }
   }
 }
