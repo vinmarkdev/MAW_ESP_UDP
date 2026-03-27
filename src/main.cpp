@@ -1,32 +1,26 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiUdp.h>
+#include <WiFiServer.h>
+#include <WiFiClient.h>
+#include "config.h"
 
-#define UART_BAUD 115200  // use stable default; increase if hardware supports
+#define UART_BAUD 115200  // stable baud rate
 #define PACK_TIMEOUT_MS 2 // reduced packet assembly delay
 #define BUFFER_SIZE 4096
 
-#define UDP_PORT 14550
-
-const char *AP_SSID = "AA_Link_00001";
-const char *AP_PASS = "TroLoLo_AA";
-const IPAddress AP_IP(192, 168, 4, 1);
-const IPAddress AP_NETMASK(255, 255, 255, 0);
+#define TCP_PORT 14550
 
 const int LED_PIN = LED_BUILTIN;
 const int LED_ON = LOW;
 const int LED_OFF = HIGH;
 
-WiFiUDP udp;
-IPAddress remoteIp;
-uint16_t remotePort = 0;
-unsigned long lastUdpTime = 0;
-const unsigned long UDP_TIMEOUT_MS = 30000; // 30 seconds
+WiFiServer server(TCP_PORT);
+WiFiClient client;
 
-uint8_t uartToUdpBuf[BUFFER_SIZE];
-uint16_t uartToUdpLen = 0;
+uint8_t uartToTcpBuf[BUFFER_SIZE];
+uint16_t uartToTcpLen = 0;
 
-uint8_t udpToUartBuf[BUFFER_SIZE];
+uint8_t tcpToUartBuf[BUFFER_SIZE];
 
 void setup() {
   Serial.begin(UART_BAUD);
@@ -37,40 +31,45 @@ void setup() {
   WiFi.softAPConfig(AP_IP, AP_IP, AP_NETMASK);
   WiFi.softAP(AP_SSID, AP_PASS);
 
-  udp.begin(UDP_PORT);
-
-  // Serial.println("UDP MAVLink bridge started");
-  // Serial.print("AP "); Serial.println(AP_SSID);
-  // Serial.print("UDP port "); Serial.println(UDP_PORT);
+  server.begin(TCP_PORT);
 }
 
 void loop() {
   int stationCount = WiFi.softAPgetStationNum();
   digitalWrite(LED_PIN, stationCount ? LED_ON : LED_OFF);
 
-  int packetSize = udp.parsePacket();
-  if (packetSize > 0) {
-    if (packetSize > BUFFER_SIZE) packetSize = BUFFER_SIZE;
-    remoteIp = udp.remoteIP();
-    remotePort = udp.remotePort();
-    lastUdpTime = millis();
-    udp.read(udpToUartBuf, packetSize);
-    Serial.write(udpToUartBuf, packetSize);
+  if (server.hasClient()) {
+    if (client && client.connected()) {
+      WiFiClient newClient = server.available();
+      newClient.stop();
+    } else {
+      client = server.available();
+    }
   }
 
-  if (remotePort > 0 && millis() - lastUdpTime > UDP_TIMEOUT_MS) {
-    remoteIp = IPAddress(0, 0, 0, 0);
-    remotePort = 0;
+  if (client && client.connected()) {
+    int avail = client.available();
+    if (avail > 0) {
+      int toRead = (avail > BUFFER_SIZE) ? BUFFER_SIZE : avail;
+      client.read(tcpToUartBuf, toRead);
+      Serial.write(tcpToUartBuf, toRead);
+    }
+  } else if (client) {
+    client.stop();
   }
 
-  while (Serial.available() && uartToUdpLen < BUFFER_SIZE) {
-    uartToUdpBuf[uartToUdpLen++] = Serial.read();
+  int readCount = 0;
+  while (Serial.available() && uartToTcpLen < BUFFER_SIZE && readCount < 256) {
+    uartToTcpBuf[uartToTcpLen++] = Serial.read();
+    readCount++;
   }
 
-  if (uartToUdpLen > 0 && remotePort > 0) {
-    udp.beginPacket(remoteIp, remotePort);
-    udp.write(uartToUdpBuf, uartToUdpLen);
-    udp.endPacket();
-    uartToUdpLen = 0;
+  if (uartToTcpLen > 0) {
+    if (client && client.connected()) {
+      client.write(uartToTcpBuf, uartToTcpLen);
+      uartToTcpLen = 0;
+    }
+  } else if (uartToTcpLen >= BUFFER_SIZE) {
+    uartToTcpLen = 0;
   }
 }
