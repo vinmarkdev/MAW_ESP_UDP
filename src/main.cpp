@@ -4,11 +4,11 @@
 #include <WiFiClient.h>
 #include "config.h"
 
-#define UART_BAUD 115200  // stable baud rate
-#define PACK_TIMEOUT_MS 2 // reduced packet assembly delay
-#define BUFFER_SIZE 4096
+const uint32_t UART_BAUD = 115200;  // stable baud rate
+const int PACK_TIMEOUT_MS = 2;      // reduced packet assembly delay
+const int BUFFER_SIZE = 4096;
 
-#define TCP_PORT 14550
+const uint16_t TCP_PORT = 14550;
 
 const int LED_PIN = LED_BUILTIN;
 const int LED_ON = LOW;
