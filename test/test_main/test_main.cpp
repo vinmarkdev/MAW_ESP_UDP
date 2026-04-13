@@ -6,7 +6,7 @@ extern const int LED_PIN;
 extern const uint16_t TCP_PORT;
 
 void test_constants_are_expected() {
-    TEST_ASSERT_EQUAL_STRING("AA_Link_00006", AP_SSID);
+    TEST_ASSERT_EQUAL_STRING("AA_Link_00010", AP_SSID);
     TEST_ASSERT_EQUAL_STRING("TroLoLo_AA", AP_PASS);
     TEST_ASSERT_EQUAL_INT(LED_BUILTIN, LED_PIN);
     TEST_ASSERT_EQUAL_UINT16(14550, TCP_PORT);
